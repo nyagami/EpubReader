@@ -96,20 +96,15 @@ void parse_nav_xhtml(const std::string &nav_path,
     if (!nav_doc.load_file(nav_path.c_str()))
         return;
 
-    auto nav = nav_doc.select_nodes("//nav").begin(), end = nav_doc.select_nodes("//nav").end();
-    for (; nav != end; ++nav)
+    for (pugi::xpath_node nav : nav_doc.select_nodes("//nav"))
     {
-        pugi::xml_node node = nav->node();
+        pugi::xml_node node = nav.node();
         std::string nav_type = node.attribute("epub:type").as_string();
-        std::cout << "nav type " << nav_type << std::endl;
-        // if (nav_type == "toc")
-        // {
-        //     pugi::xml_node ol = node.child("ol");
-        //     if (ol)
-        //     {
-        //         parse_navele_recursive(ol, href_to_label);
-        //     }
-        // }
+        pugi::xml_node ol = node.child("ol");
+        if (ol)
+        {
+            parse_navele_recursive(ol, href_to_label);
+        }
     }
 }
 
@@ -245,7 +240,13 @@ void parse_opf_from_folder(const std::string &base_dir,
             {
                 if (prev_name.empty())
                 {
-                    chapter.name = chapter_href.substr(0, chapter_href.find_last_of("."));
+                    int start_pos = chapter_href.find_last_of("/");
+                    if(start_pos == std::string::npos) { 
+                        start_pos = 0;
+                    }else { 
+                        start_pos ++;
+                    }
+                    chapter.name = chapter_href.substr(start_pos, chapter_href.find_last_of(".") - start_pos);
                 }
                 else
                 {
