@@ -1,0 +1,288 @@
+#include <string>
+#include <pugixml.hpp>
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+#include <Epub.hpp>
+
+std::string join(const std::string &path1, const std::string &path2)
+{
+    if (path1.empty())
+        return path2;
+    if (path2.empty())
+        return path1;
+
+    std::string result = path1;
+
+    // Ensure there's exactly one slash between parts
+    if (result.back() != '/' && result.back() != '\\')
+    {
+        result += '/';
+    }
+
+    if (path2.front() == '/' || path2.front() == '\\')
+    {
+        result += path2.substr(1); // skip leading slash
+    }
+    else
+    {
+        result += path2;
+    }
+
+    return result;
+}
+
+std::string getParentPath(const std::string &path)
+{
+    if (path.empty())
+        return "";
+
+    size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos)
+    {
+        return ""; // No slash found, no parent
+    }
+
+    return path.substr(0, pos);
+}
+
+std::string find_toc_href(const pugi::xml_document &opf_doc)
+{
+    auto manifest = opf_doc.child("package").child("manifest");
+    for (pugi::xml_node item : manifest.children("item"))
+    {
+        std::string media_type = item.attribute("media-type").value();
+        std::string id = item.attribute("id").value();
+        if (media_type == "application/x-dtbncx+xml" || id == "ncx" || id == "nav")
+        {
+            return item.attribute("href").value();
+        }
+    }
+    return "";
+}
+
+void parse_navele_recursive(const pugi::xml_node &parent,
+                            std::unordered_map<std::string, std::string> &href_to_label)
+{
+    for (pugi::xml_node li : parent.children("li"))
+    {
+        pugi::xml_node a = li.child("a");
+        if (a)
+        {
+            std::string href = a.attribute("href").as_string();
+            std::string label = a.text().as_string();
+
+            // Remove fragment
+            size_t sharp = href.find('#');
+            if (sharp != std::string::npos)
+                href = href.substr(0, sharp);
+
+            if (!href.empty() && !label.empty())
+                href_to_label[href] = label;
+        }
+
+        // Recursively parse nested <ol>
+        if (pugi::xml_node sublist = li.child("ol"))
+        {
+            parse_navele_recursive(sublist, href_to_label);
+        }
+    }
+}
+
+void parse_nav_xhtml(const std::string &nav_path,
+                     std::unordered_map<std::string, std::string> &href_to_label)
+{
+    pugi::xml_document nav_doc;
+    if (!nav_doc.load_file(nav_path.c_str()))
+        return;
+
+    auto nav = nav_doc.select_nodes("//nav").begin(), end = nav_doc.select_nodes("//nav").end();
+    for (; nav != end; ++nav)
+    {
+        pugi::xml_node node = nav->node();
+        std::string nav_type = node.attribute("epub:type").as_string();
+        std::cout << "nav type " << nav_type << std::endl;
+        // if (nav_type == "toc")
+        // {
+        //     pugi::xml_node ol = node.child("ol");
+        //     if (ol)
+        //     {
+        //         parse_navele_recursive(ol, href_to_label);
+        //     }
+        // }
+    }
+}
+
+void parse_navpoint_recursive(const pugi::xml_node &navPoint,
+                              std::unordered_map<std::string, std::string> &result)
+{
+    for (pugi::xml_node point : navPoint.children("navPoint"))
+    {
+        // Label
+        std::string label;
+        pugi::xml_node labelNode = point.child("navLabel").child("text");
+        if (labelNode)
+            label = labelNode.text().as_string();
+
+        // Content href
+        std::string src;
+        pugi::xml_node contentNode = point.child("content");
+        if (contentNode)
+            src = contentNode.attribute("src").as_string();
+
+        if (!label.empty() && !src.empty())
+        {
+            size_t sharp = src.find('#');
+            if (sharp != std::string::npos)
+                src = src.substr(0, sharp); // remove anchor
+
+            result[src] = label;
+        }
+
+        // Recurse into children
+        parse_navpoint_recursive(point, result);
+    }
+}
+
+void parse_toc_ncx(const std::string &ncx_path, std::unordered_map<std::string, std::string> &href_to_label)
+{
+
+    pugi::xml_document doc;
+    if (!doc.load_file(ncx_path.c_str()))
+        return;
+
+    pugi::xml_node navMap = doc.child("ncx").child("navMap");
+    if (!navMap)
+        return;
+
+    parse_navpoint_recursive(navMap, href_to_label);
+}
+
+void parse_opf_from_folder(const std::string &base_dir,
+                           const std::string &opf_rel_path,
+                           EpubMetadata &meta_out)
+{
+    std::string opf_path = join(base_dir, opf_rel_path);
+    pugi::xml_document opf_doc;
+    if (!opf_doc.load_file(opf_path.c_str()))
+        return;
+    std::string version;
+    pugi::xml_node package = opf_doc.child("package");
+    if (package)
+    {
+        version = package.attribute("version").as_string();
+    }
+
+    std::unordered_map<std::string, std::string> href_to_label;
+    std::string toc_href = find_toc_href(opf_doc);
+    if (toc_href.find("ncx") != std::string::npos)
+    {
+        std::string ncx_path = join(getParentPath(opf_path), toc_href);
+        parse_toc_ncx(ncx_path, href_to_label);
+    }
+    else
+    {
+        std::string nav_path = join(getParentPath(opf_path), toc_href);
+        parse_nav_xhtml(nav_path, href_to_label);
+    }
+
+    auto metadata = opf_doc.child("package").child("metadata");
+    meta_out.name = metadata.child("dc:title").text().as_string();
+    meta_out.author = metadata.child("dc:creator").text().as_string();
+    meta_out.artist = metadata.child("dc:contributor").text().as_string();
+    meta_out.summary = metadata.child("dc:description").text().as_string();
+
+    std::unordered_map<std::string, std::string> id_to_href;
+
+    std::string cover_id;
+    for (pugi::xml_node meta : metadata.children("meta"))
+    {
+        if (std::string(meta.attribute("name").value()) == "cover")
+        {
+            cover_id = meta.attribute("content").value();
+            break;
+        }
+    }
+
+    auto manifest = opf_doc.child("package").child("manifest");
+    for (pugi::xml_node item : manifest.children("item"))
+    {
+        std::string id = item.attribute("id").value();
+        std::string href = item.attribute("href").value();
+        std::string media_type = item.attribute("media-type").value();
+
+        id_to_href[id] = href;
+        if (media_type == "text/css")
+        {
+            meta_out.cssPaths.push_back(base_dir + '/' + href);
+        }
+    }
+
+    if (!cover_id.empty() && id_to_href.count(cover_id))
+    {
+        meta_out.cover = base_dir + '/' + id_to_href[cover_id];
+    }
+
+    auto spine = opf_doc.child("package").child("spine");
+    std::string prev_name = "";
+    int part = 2;
+    for (pugi::xml_node itemref : spine.children("itemref"))
+    {
+        std::string idref = itemref.attribute("idref").value();
+        if (id_to_href.count(idref))
+        {
+            std::string chapter_href = id_to_href[idref];
+            std::string chapter_path = join(getParentPath(opf_path), chapter_href);
+
+            Chapter chapter;
+            chapter.path = base_dir + '/' + chapter_href;
+
+            if (href_to_label.count(chapter_href))
+            {
+                chapter.name = href_to_label[chapter_href];
+            }
+            if (chapter.name.empty())
+            {
+                if (prev_name.empty())
+                {
+                    chapter.name = chapter_href.substr(0, chapter_href.find_last_of("."));
+                }
+                else
+                {
+                    chapter.name = prev_name + " (" + std::to_string(part) + ")";
+                    part += 1;
+                }
+            }
+            else
+            {
+                prev_name = chapter.name;
+                part = 2;
+            }
+
+            meta_out.chapters.push_back(chapter);
+        }
+    }
+}
+
+EpubMetadata parseEpub(const std::string epub_path)
+{
+    // Step 1: Read container.xml
+    std::string container_path = join(epub_path, "META-INF/container.xml");
+
+    // Step 2: Parse container.xml to find .opf
+    pugi::xml_document container_doc;
+    if (!container_doc.load_file(container_path.c_str()))
+        throw std::runtime_error("Failed to load container.xml");
+
+    std::string opf_path = container_doc.child("container")
+                               .child("rootfiles")
+                               .child("rootfile")
+                               .attribute("full-path")
+                               .value();
+
+    // Step 3: Parse OPF file
+    EpubMetadata metadata;
+    parse_opf_from_folder(epub_path, opf_path, metadata);
+
+    return metadata;
+}

@@ -1,0 +1,5 @@
+/.DS_Store
+epub
+cache
+output*.txt
+.vscode
