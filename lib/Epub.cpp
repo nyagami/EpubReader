@@ -158,6 +158,7 @@ void parse_opf_from_folder(const std::string &base_dir,
                            EpubMetadata &meta_out)
 {
     std::string opf_path = join(base_dir, opf_rel_path);
+    std::string opf_dir = getParentPath(opf_path);
     pugi::xml_document opf_doc;
     if (!opf_doc.load_file(opf_path.c_str()))
         return;
@@ -172,12 +173,12 @@ void parse_opf_from_folder(const std::string &base_dir,
     std::string toc_href = find_toc_href(opf_doc);
     if (toc_href.find("ncx") != std::string::npos)
     {
-        std::string ncx_path = join(getParentPath(opf_path), toc_href);
+        std::string ncx_path = join(opf_dir, toc_href);
         parse_toc_ncx(ncx_path, href_to_label);
     }
     else
     {
-        std::string nav_path = join(getParentPath(opf_path), toc_href);
+        std::string nav_path = join(opf_dir, toc_href);
         parse_nav_xhtml(nav_path, href_to_label);
     }
 
@@ -209,13 +210,13 @@ void parse_opf_from_folder(const std::string &base_dir,
         id_to_href[id] = href;
         if (media_type == "text/css")
         {
-            meta_out.cssPaths.push_back(base_dir + '/' + href);
+            meta_out.cssPaths.push_back(opf_dir + '/' + href);
         }
     }
 
     if (!cover_id.empty() && id_to_href.count(cover_id))
     {
-        meta_out.cover = base_dir + '/' + id_to_href[cover_id];
+        meta_out.cover = opf_dir + '/' + id_to_href[cover_id];
     }
 
     auto spine = opf_doc.child("package").child("spine");
@@ -227,10 +228,8 @@ void parse_opf_from_folder(const std::string &base_dir,
         if (id_to_href.count(idref))
         {
             std::string chapter_href = id_to_href[idref];
-            std::string chapter_path = join(getParentPath(opf_path), chapter_href);
-
             Chapter chapter;
-            chapter.path = base_dir + '/' + chapter_href;
+            chapter.path = opf_dir + '/' + chapter_href;
 
             if (href_to_label.count(chapter_href))
             {
