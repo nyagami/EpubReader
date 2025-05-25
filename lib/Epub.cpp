@@ -5,6 +5,7 @@
 #include <vector>
 #include <Epub.hpp>
 #include <sstream>
+#include <regex>
 
 std::string join(const std::string &folder_path, const std::string &child_path)
 {
@@ -60,6 +61,12 @@ std::string getParentPath(const std::string &path)
     }
 
     return path.substr(0, pos);
+}
+
+void clean_summary(std::string &summary)
+{
+    std::regex clean_p_regex("<p>|</p>");
+    summary = std::regex_replace(summary, clean_p_regex, "\n");
 }
 
 std::string find_toc_href(const pugi::xml_document &opf_doc)
@@ -198,6 +205,7 @@ void parse_opf_from_folder(const std::string &base_dir,
     meta_out.author = metadata.child("dc:creator").text().as_string();
     meta_out.artist = metadata.child("dc:contributor").text().as_string();
     meta_out.summary = metadata.child("dc:description").text().as_string();
+    clean_summary(meta_out.summary);
 
     std::unordered_map<std::string, std::string> id_to_href;
 
