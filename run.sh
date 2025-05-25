@@ -6,5 +6,6 @@ g++ -std=c++17 -Ilib ./lib/pugixml.cpp ./lib/Epub.cpp main.cpp -o program
 ./program /workspaces/EpubReader/cache/5 > output5.txt
 ./program /workspaces/EpubReader/cache/6 > output6.txt
 ./program /workspaces/EpubReader/cache/7 > output7.txt
+./program /workspaces/EpubReader/cache/8 > output8.txt
 
 rm program

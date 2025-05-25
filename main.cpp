@@ -63,6 +63,10 @@ int main(int argc, char *argv[])
     for (const auto &css : metadata.cssPaths)
         cout << " - " << css << "\n";
 
+        cout << "\nImage Files:\n";
+    for (const auto &img : metadata.imagePaths)
+        cout << " - " << img << "\n";
+
     cout << "\nTime: " << ms << " ms\n";
     cout << "Peak memory usage: " << memory_kb << " KB\n";
 

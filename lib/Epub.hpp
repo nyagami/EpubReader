@@ -20,6 +20,7 @@ struct EpubMetadata
     std::string artist;
     std::vector<Chapter> chapters;
     std::vector<std::string> cssPaths;
+    std::vector<std::string> imagePaths;
 };
 
 EpubMetadata parseEpub(const std::string epub_path);

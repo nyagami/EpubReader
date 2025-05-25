@@ -4,32 +4,39 @@
 #include <unordered_map>
 #include <vector>
 #include <Epub.hpp>
+#include <sstream>
 
-std::string join(const std::string &path1, const std::string &path2)
+std::string join(const std::string &folder_path, const std::string &child_path)
 {
-    if (path1.empty())
-        return path2;
-    if (path2.empty())
-        return path1;
-
-    std::string result = path1;
-
-    // Ensure there's exactly one slash between parts
-    if (result.back() != '/' && result.back() != '\\')
-    {
-        result += '/';
+ std::string full_path = folder_path;
+    if (!full_path.empty() && full_path.back() != '/') {
+        full_path += '/';
     }
 
-    if (path2.front() == '/' || path2.front() == '\\')
-    {
-        result += path2.substr(1); // skip leading slash
-    }
-    else
-    {
-        result += path2;
+    std::stringstream ss(child_path);
+    std::string segment;
+    while (std::getline(ss, segment, '/')) {
+        if (segment == "..") {
+            // Go up one level
+            if (!full_path.empty()) {
+                size_t lastSlash = full_path.rfind('/', full_path.length() - 2);
+                if (lastSlash != std::string::npos) {
+                    full_path.resize(lastSlash + 1);
+                } else {
+                    full_path = ""; // Went too far up
+                }
+            }
+        } else if (segment != "." && !segment.empty()) {
+            full_path += segment + '/';
+        }
     }
 
-    return result;
+    // Remove the trailing slash if it exists and the path is not just "/"
+    if (full_path.length() > 1 && full_path.back() == '/') {
+        full_path.pop_back();
+    }
+
+    return full_path;
 }
 
 std::string getParentPath(const std::string &path)
@@ -210,13 +217,15 @@ void parse_opf_from_folder(const std::string &base_dir,
         id_to_href[id] = href;
         if (media_type == "text/css")
         {
-            meta_out.cssPaths.push_back(opf_dir + '/' + href);
+            meta_out.cssPaths.push_back(join(opf_dir, href));
+        }else if(media_type == "image/jpeg" || media_type == "image/png" || media_type == "image/jpg") { 
+            meta_out.imagePaths.push_back(join(opf_dir, href));
         }
     }
 
     if (!cover_id.empty() && id_to_href.count(cover_id))
     {
-        meta_out.cover = opf_dir + '/' + id_to_href[cover_id];
+        meta_out.cover = join(opf_dir, id_to_href[cover_id]);
     }
 
     auto spine = opf_doc.child("package").child("spine");
@@ -229,7 +238,7 @@ void parse_opf_from_folder(const std::string &base_dir,
         {
             std::string chapter_href = id_to_href[idref];
             Chapter chapter;
-            chapter.path = opf_dir + '/' + chapter_href;
+            chapter.path = join(opf_dir, chapter_href);
 
             if (href_to_label.count(chapter_href))
             {
