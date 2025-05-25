@@ -226,6 +226,7 @@ void parse_opf_from_folder(const std::string &base_dir,
     if (!cover_id.empty() && id_to_href.count(cover_id))
     {
         meta_out.cover = join(opf_dir, id_to_href[cover_id]);
+        meta_out.imagePaths.push_back(meta_out.cover); // this could be duplicated in image paths (check in JS side)
     }
 
     auto spine = opf_doc.child("package").child("spine");
