@@ -8,31 +8,40 @@
 
 std::string join(const std::string &folder_path, const std::string &child_path)
 {
- std::string full_path = folder_path;
-    if (!full_path.empty() && full_path.back() != '/') {
+    std::string full_path = folder_path;
+    if (!full_path.empty() && full_path.back() != '/')
+    {
         full_path += '/';
     }
 
     std::stringstream ss(child_path);
     std::string segment;
-    while (std::getline(ss, segment, '/')) {
-        if (segment == "..") {
+    while (std::getline(ss, segment, '/'))
+    {
+        if (segment == "..")
+        {
             // Go up one level
-            if (!full_path.empty()) {
+            if (!full_path.empty())
+            {
                 size_t lastSlash = full_path.rfind('/', full_path.length() - 2);
-                if (lastSlash != std::string::npos) {
+                if (lastSlash != std::string::npos)
+                {
                     full_path.resize(lastSlash + 1);
-                } else {
-                    full_path = ""; // Went too far up
+                }
+                else
+                {
+                    full_path = "";
                 }
             }
-        } else if (segment != "." && !segment.empty()) {
+        }
+        else if (segment != "." && !segment.empty())
+        {
             full_path += segment + '/';
         }
     }
 
-    // Remove the trailing slash if it exists and the path is not just "/"
-    if (full_path.length() > 1 && full_path.back() == '/') {
+    if (full_path.length() > 1 && full_path.back() == '/')
+    {
         full_path.pop_back();
     }
 
@@ -47,7 +56,7 @@ std::string getParentPath(const std::string &path)
     size_t pos = path.find_last_of("/\\");
     if (pos == std::string::npos)
     {
-        return ""; // No slash found, no parent
+        return "";
     }
 
     return path.substr(0, pos);
@@ -79,7 +88,6 @@ void parse_navele_recursive(const pugi::xml_node &parent,
             std::string href = a.attribute("href").as_string();
             std::string label = a.text().as_string();
 
-            // Remove fragment
             size_t sharp = href.find('#');
             if (sharp != std::string::npos)
                 href = href.substr(0, sharp);
@@ -120,13 +128,11 @@ void parse_navpoint_recursive(const pugi::xml_node &navPoint,
 {
     for (pugi::xml_node point : navPoint.children("navPoint"))
     {
-        // Label
         std::string label;
         pugi::xml_node labelNode = point.child("navLabel").child("text");
         if (labelNode)
             label = labelNode.text().as_string();
 
-        // Content href
         std::string src;
         pugi::xml_node contentNode = point.child("content");
         if (contentNode)
@@ -136,12 +142,10 @@ void parse_navpoint_recursive(const pugi::xml_node &navPoint,
         {
             size_t sharp = src.find('#');
             if (sharp != std::string::npos)
-                src = src.substr(0, sharp); // remove anchor
-
+                src = src.substr(0, sharp);
             result[src] = label;
         }
 
-        // Recurse into children
         parse_navpoint_recursive(point, result);
     }
 }
@@ -218,7 +222,9 @@ void parse_opf_from_folder(const std::string &base_dir,
         if (media_type == "text/css")
         {
             meta_out.cssPaths.push_back(join(opf_dir, href));
-        }else if(media_type == "image/jpeg" || media_type == "image/png" || media_type == "image/jpg") { 
+        }
+        else if (media_type == "image/jpeg" || media_type == "image/png" || media_type == "image/jpg")
+        {
             meta_out.imagePaths.push_back(join(opf_dir, href));
         }
     }
@@ -249,10 +255,13 @@ void parse_opf_from_folder(const std::string &base_dir,
                 if (prev_name.empty())
                 {
                     int start_pos = chapter_href.find_last_of("/");
-                    if(start_pos == std::string::npos) { 
+                    if (start_pos == std::string::npos)
+                    {
                         start_pos = 0;
-                    }else { 
-                        start_pos ++;
+                    }
+                    else
+                    {
+                        start_pos++;
                     }
                     chapter.name = chapter_href.substr(start_pos, chapter_href.find_last_of(".") - start_pos);
                 }
@@ -275,10 +284,8 @@ void parse_opf_from_folder(const std::string &base_dir,
 
 EpubMetadata parseEpub(const std::string epub_path)
 {
-    // Step 1: Read container.xml
     std::string container_path = join(epub_path, "META-INF/container.xml");
 
-    // Step 2: Parse container.xml to find .opf
     pugi::xml_document container_doc;
     if (!container_doc.load_file(container_path.c_str()))
         throw std::runtime_error("Failed to load container.xml");
@@ -289,7 +296,6 @@ EpubMetadata parseEpub(const std::string epub_path)
                                .attribute("full-path")
                                .value();
 
-    // Step 3: Parse OPF file
     EpubMetadata metadata;
     parse_opf_from_folder(epub_path, opf_path, metadata);
 
